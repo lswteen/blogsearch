@@ -1,0 +1,105 @@
+plugins {
+	id 'java'
+	id 'org.springframework.boot' version '2.7.10'
+	id 'io.spring.dependency-management' version '1.0.15.RELEASE'
+	id "org.asciidoctor.jvm.convert" version "3.3.2"
+}
+
+group = 'com.github.blog'
+version = '0.0.1-SNAPSHOT'
+sourceCompatibility = '11'
+
+repositories {
+	mavenCentral()
+}
+
+configurations {
+	asciidoctorExtensions
+	compileOnly {
+		extendsFrom annotationProcessor
+	}
+}
+
+ext {
+	set('snippetsDir', file("build/generated-snippets"))
+	set('springCloudVersion', "2021.0.6")
+}
+
+dependencyManagement {
+	imports {
+		mavenBom "org.springframework.cloud:spring-cloud-dependencies:${springCloudVersion}"
+	}
+}
+
+dependencies {
+	implementation 'org.springframework.boot:spring-boot-starter-actuator'
+	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+	implementation 'org.springframework.boot:spring-boot-starter-cache'
+	implementation 'com.github.ben-manes.caffeine:caffeine'
+
+
+	implementation 'org.springframework.boot:spring-boot-starter-hateoas'
+	implementation 'org.springframework.boot:spring-boot-starter-web'
+	implementation 'org.springframework.cloud:spring-cloud-starter-openfeign'
+
+	implementation 'org.hibernate:hibernate-validator:8.0.0.Final'
+
+	compileOnly 'org.projectlombok:lombok'
+	runtimeOnly 'com.h2database:h2'
+
+	annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
+	annotationProcessor 'org.projectlombok:lombok'
+
+
+	testImplementation 'org.springframework.boot:spring-boot-starter-test'
+	asciidoctorExtensions 'org.springframework.restdocs:spring-restdocs-asciidoctor'
+	testImplementation 'org.springframework.restdocs:spring-restdocs-mockmvc'
+	testCompileOnly 'org.projectlombok:lombok'
+	testAnnotationProcessor 'org.projectlombok:lombok'
+}
+
+
+test {
+	outputs.dir snippetsDir
+	useJUnitPlatform()
+}
+
+asciidoctor { // asciidoctor 작업 구성
+	dependsOn test // test 작업 이후에 작동하도록 하는 설정
+	configurations 'asciidoctorExtensions' // 위에서 작성한 configuration 적용
+	inputs.dir snippetsDir // snippetsDir 를 입력으로 구성
+
+	sources{
+		include("**/index.adoc","**/common/*.adoc")
+	}
+
+	baseDirFollowsSourceFile()
+}
+
+asciidoctor.doFirst {
+	delete file('src/main/resources/static/docs')
+}
+
+task copyDocument(type: Copy) {
+	dependsOn asciidoctor
+	from file("build/docs/asciidoc")
+	into file("src/main/resources/static/docs")
+}
+
+build {
+	dependsOn copyDocument
+}
+
+tasks {
+
+	bootJar {
+		archiveClassifier = ''
+		archiveFileName = "blog.${archiveExtension.get()}"
+		enabled = true
+
+		dependsOn copyDocument    // (10-1)
+		from ("${asciidoctor.outputDir}") {  // (10-2)
+			into 'static/docs'     // (10-3)
+		}
+	}
+}
